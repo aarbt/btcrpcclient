@@ -623,3 +623,37 @@ func (c *Client) SearchRawTransactionsVerbose(address btcutil.Address, skip,
 	return c.SearchRawTransactionsVerboseAsync(address, skip, count,
 		includePrevOut, reverse, &filterAddrs).Receive()
 }
+
+type FutureSearchDataTransactionsResult chan *response
+
+func (r FutureSearchDataTransactionsResult) Receive() ([]*wire.ShaHash, error) {
+	res, err := receiveFuture(r)
+	if err != nil {
+		return nil, err
+	}
+	var hashes []struct {
+		TxHash string
+	}
+	err = json.Unmarshal(res, &hashes)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]*wire.ShaHash, len(hashes))
+	for i, hash := range hashes {
+		result[i], err = wire.NewShaHashFromStr(hash.TxHash)
+		if err != nil {
+			// TODO do something
+		}
+	}
+	return result, nil
+}
+
+func (c *Client) SearchDataTransactionsAsync(data []byte) FutureSearchDataTransactionsResult {
+	encoded := hex.EncodeToString(data)
+	cmd := btcjson.NewSearchDataTransactionsCmd(encoded)
+	return c.sendCmd(cmd)
+}
+
+func (c *Client) SearchDataTransactions(data []byte) ([]*wire.ShaHash, error) {
+	return c.SearchDataTransactionsAsync(data).Receive()
+}
